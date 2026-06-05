@@ -8,6 +8,8 @@ const bcrypt = require('bcryptjs');
 const is = require('is_js');
 const Roles = require('../db/models/Roles');
 const UserRoles = require('../db/models/UserRoles');
+const config = require('../config');
+const jwt = require('jwt-simple');
 
 /* GET users listing. */
 router.get('/', async (req, res, next) => {
@@ -191,5 +193,52 @@ router.post('/register', async (req, res) => {
     res.status(errorResponse.code).json(errorResponse);
   }
 });
+
+router.post('/auth', async (req, res) => {
+  try {
+    let {email, password} = req.body;
+
+    Users.validateFieldsBeforeAuth(email, password);
+
+    let user = await Users.findOne({ email });
+
+    if(!user) throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, "Validation Error", "Email or password is wrong");
+
+    console.log("Problem yok!");
+
+    console.log("Giriş sayfasından gelen şifre (düz metin):", password);
+    console.log("Veritabanından gelen kullanıcı nesnesi:", user);
+
+    let isPasswordValid = bcrypt.compareSync(password, user.password);
+
+    if (!isPasswordValid) {
+        throw new CustomError(Enum.HTTP_CODES.UNAUTHORIZED, "Validation Error", "Email or password is wrong");
+    };
+
+    console.log("Problem yok 2!");
+
+    let payload = {
+      id: user._id,
+      exp: parseInt(Date.now() / 1000) + config.JWT.EXPIRE_TIME
+    }
+
+    console.log("Payload hazır!");
+
+    let token = jwt.encode(payload, config.JWT.SECRET);
+
+    console.log("Token hazır!");
+
+    let userData = {
+      _id: user._id,
+      first_name: user.first_name,
+      last_name: user.last_name
+    }
+
+    res.json(Response.successResponse({token, user: userData}));
+  } catch (err) {
+    let errorResponse = Response.errorResponse(err);
+    res.status(errorResponse.code).json(errorResponse);
+  }
+})
 
 module.exports = router;
